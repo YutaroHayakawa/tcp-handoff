@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <errno.h>
 
-#include <tcpho/tcpho_l2sw.h>
+#include <tcpho/tcpho.h>
 
 int
 tcpho_l2sw_add_rule(struct tcpho_l2sw_driver *driver,
