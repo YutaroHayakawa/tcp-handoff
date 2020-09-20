@@ -1,16 +1,36 @@
 CLANG=clang
 BPFTOOL=bpftool
 
-TARGETS = test tcp_ho_redirect.skel.h tcp_ho_redirect.bpf.o
+CFLAGS= \
+	-g \
+	-Wall \
+	-Wextra \
+	-I include
 
-test: tcp_ho_redirect.skel.h
-	$(CC) -o $@ -g -Wall test.c -lbpf
+BPF_CFLAGS= \
+	-g \
+	-O3 \
+	-Wall \
+	-Wextra \
+	-I include \
+	-target bpf
 
-tcp_ho_redirect.skel.h: tcp_ho_redirect.bpf.o
-	$(BPFTOOL) gen skeleton tcp_ho_redirect.bpf.o > tcp_ho_redirect.skel.h
+LDFLAGS= \
+	-lbpf
+	
 
-tcp_ho_redirect.bpf.o: tcp_ho_redirect.bpf.c
-	$(CLANG) -target bpf -Wall -O3 -g -c $^
+TARGETS = libtcpho.a tcpho_l2redir.skel.h
+
+libtcpho.a: tcpho_l2sw.o tcpho_l2redir.o
+	ar -crs $@ $^
+
+tcpho_l2redir.o: tcpho_l2redir.skel.h
+
+tcpho_l2redir.skel.h: tcpho_l2redir.bpf.o
+	$(BPFTOOL) gen skeleton $^ > tcpho_l2redir.skel.h
+
+tcpho_l2redir.bpf.o: tcpho_l2redir.bpf.c
+	$(CLANG) $(BPF_CFLAGS) -c $^
 
 clean:
-	- rm -rf $(TARGETS)
+	- rm -rf $(TARGETS) *.o

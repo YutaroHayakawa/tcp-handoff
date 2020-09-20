@@ -9,6 +9,8 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#include <tcpho/tcpho_l2sw.h>
+
 #define __inline __attribute__((always_inline))
 
 #define assert_len(interest, end) ({ \
@@ -19,26 +21,16 @@
 
 uint8_t mymac[ETH_ALEN] = {0};
 
-enum tcp_handoff_state {
-	TCP_HO_STATE_BLOCKING,
-	TCP_HO_STATE_FORWARDING
-};
-
 struct packet {
 	struct ethhdr *eth;
 	struct bpf_sock_tuple tuple;
-};
-
-struct tcp_handoff_info {
-	uint32_t state;
-	uint8_t to[ETH_ALEN];
 };
 
 struct {
 	__uint(type, BPF_MAP_TYPE_SK_STORAGE);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 	__type(key, int);
-	__type(value, struct tcp_handoff_info);
+	__type(value, struct tcpho_l2info);
 } tcp_handoff_map SEC(".maps");
 
 static __inline int
@@ -93,13 +85,13 @@ parse_ethernet(void *data, void *data_end,  uint32_t *offset, struct packet *pkt
 }
 
 SEC("classifier") int
-redirect_main(struct __sk_buff *skb)
+l2redir_main(struct __sk_buff *skb)
 {
 	int action;
 	struct packet pkt;
 	uint32_t offset = 0;
 	struct bpf_sock *sk;
-	struct tcp_handoff_info *ho_info;
+	struct tcpho_l2info *ho_info;
 	void *data = (void *)(long)skb->data;
 	void *data_end = (void *)(long)skb->data_end;
 
