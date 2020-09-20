@@ -9,12 +9,18 @@
 #include <linux/if_ether.h>
 
 #include <bpf/bpf.h>
-#include <tcpho/tcpho_l2sw.h>
+#include <tcpho/tcpho.h>
 
 #include "tcpho_l2redir.skel.h"
 
 #define PINNED_PROG_PATH "/sys/fs/bpf/tcpho_l2redir"
 #define __unused __attribute__((unused))
+
+struct tcpho_l2redir_driver {
+	char *attached_iface;
+	struct tcpho_l2sw_driver base;
+	struct tcpho_l2redir_bpf *bpf;
+};
 
 const char *attach_command_template =
 	"tc qdisc add dev %s clsact && "
@@ -67,19 +73,6 @@ err0:
 	free(command);
 	return error;
 }
-
-enum tcpho_errors {
-	// Use Linux errno for general errors
-	LIBTCP_HO_ERRNO_START = 4000,
-	LIBTCP_HO_ERRNO_LIBBPF, // libbpf error
-	LIBTCP_HO_ERRNO_TCCMD, // tc command error
-};
-
-struct tcpho_l2redir_driver {
-	char *attached_iface;
-	struct tcpho_l2sw_driver base;
-	struct tcpho_l2redir_bpf *bpf;
-};
 
 int
 tcpho_l2redir_add_rule(struct tcpho_l2sw_driver *_driver,
@@ -134,7 +127,7 @@ tcpho_l2redir_delete_rule(__unused struct tcpho_l2sw_driver *_driver,
 }
 
 int
-tcpho_l2redir_driver_create(struct tcpho_l2redir_driver **driverp, char *iface)
+tcpho_l2redir_driver_create(struct tcpho_l2sw_driver **driverp, char *iface)
 {
 	int error;
 	char *attached_iface;
@@ -158,19 +151,19 @@ tcpho_l2redir_driver_create(struct tcpho_l2redir_driver **driverp, char *iface)
 
 	bpf = tcpho_l2redir_bpf__open_and_load();
 	if (bpf == NULL) {
-		error = LIBTCP_HO_ERRNO_LIBBPF;
+		error = LIBTCPHO_ERRNO_LIBBPF;
 		goto err1;
 	}
 
 	error = bpf_program__pin(bpf->progs.l2redir_main, PINNED_PROG_PATH);
 	if (error != 0) {
-		error = LIBTCP_HO_ERRNO_LIBBPF;
+		error = LIBTCPHO_ERRNO_LIBBPF;
 		goto err2;
 	}
 
 	error = attach_to_tc(iface);
 	if (error != 0) {
-		error = LIBTCP_HO_ERRNO_TCCMD;
+		error = LIBTCPHO_ERRNO_TCCMD;
 		goto err3;
 	}
 
@@ -180,7 +173,7 @@ tcpho_l2redir_driver_create(struct tcpho_l2redir_driver **driverp, char *iface)
 	driver->attached_iface = attached_iface;
 	driver->bpf = bpf;
 
-	*driverp = driver;
+	*driverp = (struct tcpho_l2sw_driver *)driver;
 
 	return 0;
 
@@ -197,9 +190,11 @@ err0:
 }
 
 int
-tcpho_l2redir_driver_destroy(struct tcpho_l2redir_driver *driver)
+tcpho_l2redir_driver_destroy(struct tcpho_l2sw_driver *_driver)
 {
 	int error;
+	struct tcpho_l2redir_driver *driver =
+		(struct tcpho_l2redir_driver *)_driver;
 
 	if (driver == NULL) {
 		return EINVAL;
@@ -207,12 +202,12 @@ tcpho_l2redir_driver_destroy(struct tcpho_l2redir_driver *driver)
 
 	error = detach_from_tc(driver->attached_iface);
 	if (error != 0) {
-		return LIBTCP_HO_ERRNO_TCCMD;
+		return LIBTCPHO_ERRNO_TCCMD;
 	}
 
 	error = bpf_program__unpin(driver->bpf->progs.l2redir_main, PINNED_PROG_PATH);
 	if (error != 0) {
-		return LIBTCP_HO_ERRNO_LIBBPF;
+		return LIBTCPHO_ERRNO_LIBBPF;
 	}
 
 	tcpho_l2redir_bpf__destroy(driver->bpf);
