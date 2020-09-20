@@ -1,9 +1,9 @@
 #pragma once
 
 enum tcpho_state {
-	TCP_HO_STATE_BLOCKING,
-	TCP_HO_STATE_FORWARDING,
-	TCP_HO_STATE_MAX
+	TCPHO_STATE_BLOCKING,
+	TCPHO_STATE_FORWARDING,
+	TCPHO_STATE_MAX
 };
 
 struct tcpho_l2info {
@@ -17,7 +17,7 @@ struct tcpho_l2sw_add_attr {
 };
 
 struct tcpho_l2sw_mod_attr {
-	uint32_t cur_state;
+	int sock;
 	uint32_t new_state;
 };
 

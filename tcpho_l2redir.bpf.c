@@ -115,13 +115,13 @@ l2redir_main(struct __sk_buff *skb)
 		goto end1;
 	}
 
-	if (ho_info->state == TCP_HO_STATE_BLOCKING) {
+	if (ho_info->state == TCPHO_STATE_BLOCKING) {
 		// This socket is blocking. Drop it.
 		action = TC_ACT_SHOT;
 		goto end1;
 	}
 
-	if (ho_info->state == TCP_HO_STATE_FORWARDING) {
+	if (ho_info->state == TCPHO_STATE_FORWARDING) {
 		// This socket is forwarding. Redirect it.
 		__builtin_memcpy(pkt.eth->h_dest, ho_info->to, ETH_ALEN);
 		__builtin_memcpy(pkt.eth->h_source, mymac, ETH_ALEN);
