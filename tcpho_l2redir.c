@@ -8,11 +8,13 @@
 #include <assert.h>
 #include <linux/if_ether.h>
 
+#include <bpf/bpf.h>
 #include <tcpho/tcpho_l2sw.h>
 
 #include "tcpho_l2redir.skel.h"
 
 #define PINNED_PROG_PATH "/sys/fs/bpf/tcpho_l2redir"
+#define __unused __attribute__((unused))
 
 const char *attach_command_template =
 	"tc qdisc add dev %s clsact && "
@@ -80,6 +82,58 @@ struct tcpho_l2redir_driver {
 };
 
 int
+tcpho_l2redir_add_rule(struct tcpho_l2sw_driver *_driver,
+		struct tcpho_l2sw_add_attr *attr)
+{
+	int map_fd;
+	struct tcpho_l2info info;
+	struct tcpho_l2redir_driver *driver =
+		(struct tcpho_l2redir_driver *)_driver;
+
+	map_fd = bpf_map__fd(driver->bpf->maps.tcp_handoff_map);
+
+	info.state = TCPHO_STATE_BLOCKING;
+	memcpy(info.to, attr->dmac, 6);
+
+	return bpf_map_update_elem(map_fd, &attr->sock, &info, 0);
+}
+
+int
+tcpho_l2redir_modify_rule(struct tcpho_l2sw_driver *_driver,
+		struct tcpho_l2sw_mod_attr *attr)
+{
+	int error, map_fd;
+	struct tcpho_l2info info;
+	struct tcpho_l2redir_driver *driver =
+		(struct tcpho_l2redir_driver *)_driver;
+
+	map_fd = bpf_map__fd(driver->bpf->maps.tcp_handoff_map);
+
+	/*
+	 * Fetch and modify. Assume there is no concurrent writer
+	 */
+	error = bpf_map_lookup_elem(map_fd, &attr->sock, &info);
+	if (error == -1) {
+		return errno;
+	}
+
+	info.state = TCPHO_STATE_FORWARDING;
+
+	return bpf_map_update_elem(map_fd, &attr->sock, &info, 0);
+}
+
+int
+tcpho_l2redir_delete_rule(__unused struct tcpho_l2sw_driver *_driver,
+		__unused struct tcpho_l2sw_del_attr *attr)
+{
+	/*
+	 * Socket local storage will be deleted with socket.
+	 * We don't have to delete it explicitely.
+	 */
+	return 0;
+}
+
+int
 tcpho_l2redir_driver_create(struct tcpho_l2redir_driver **driverp, char *iface)
 {
 	int error;
@@ -120,6 +174,9 @@ tcpho_l2redir_driver_create(struct tcpho_l2redir_driver **driverp, char *iface)
 		goto err3;
 	}
 
+	driver->base.add = tcpho_l2redir_add_rule;
+	driver->base.mod = tcpho_l2redir_modify_rule;
+	driver->base.del = tcpho_l2redir_delete_rule;
 	driver->attached_iface = attached_iface;
 	driver->bpf = bpf;
 
