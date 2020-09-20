@@ -6,6 +6,13 @@ enum tcpho_state {
 	TCPHO_STATE_MAX
 };
 
+enum tcpho_errors {
+	// Use Linux errno for general errors
+	LIBTCPHO_ERRNO_START = 4000,
+	LIBTCPHO_ERRNO_LIBBPF, // libbpf error
+	LIBTCPHO_ERRNO_TCCMD, // tc command error
+};
+
 struct tcpho_l2info {
 	uint32_t state;
 	uint8_t to[6];
