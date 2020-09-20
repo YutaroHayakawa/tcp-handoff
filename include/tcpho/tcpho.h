@@ -41,6 +41,8 @@ struct tcpho_l2sw_driver {
 			struct tcpho_l2sw_del_attr *);
 };
 
+int tcpho_l2redir_driver_create(struct tcpho_l2sw_driver **, char *);
+int tcpho_l2redir_driver_destroy(struct tcpho_l2sw_driver *);
 int tcpho_l2sw_add_rule(struct tcpho_l2sw_driver *, struct tcpho_l2sw_add_attr *);
 int tcpho_l2sw_modify_rule(struct tcpho_l2sw_driver *, struct tcpho_l2sw_mod_attr *);
 int tcpho_l2sw_delete_rule(struct tcpho_l2sw_driver *, struct tcpho_l2sw_del_attr *);
