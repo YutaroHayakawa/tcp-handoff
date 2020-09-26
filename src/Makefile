@@ -5,23 +5,23 @@ CFLAGS= \
 	-g \
 	-Wall \
 	-Wextra \
-	-I include
+	-I ../include
 
 BPF_CFLAGS= \
 	-g \
 	-O3 \
 	-Wall \
 	-Wextra \
-	-I include \
+	-I ../include \
 	-target bpf
 
 LDFLAGS= \
 	-lbpf
 	
 
-TARGETS = libtcpho.a tcpho_l2redir.skel.h
+TARGETS = libtcpho.a tcpho_l2redir.skel.h test
 
-libtcpho.a: tcpho_l2sw.o tcpho_l2redir.o
+libtcpho.a: tcpho_l2redir.o
 	ar -crs $@ $^
 
 tcpho_l2redir.o: tcpho_l2redir.skel.h

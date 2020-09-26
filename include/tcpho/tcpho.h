@@ -1,48 +1,23 @@
 #pragma once
 
+#define TCPHO_PINNED_PREFIX "/sys/fs/bpf/tcpho"
+#define TCPHO_L2REDIR_PROG_PATH TCPHO_PINNED_PREFIX "/l2redir_prog"
+#define TCPHO_L2REDIR_MAP_PATH TCPHO_PINNED_PREFIX "/l2redir_map"
+
+struct tcpho_l2redir_driver;
+
 enum tcpho_state {
 	TCPHO_STATE_BLOCKING,
 	TCPHO_STATE_FORWARDING,
 	TCPHO_STATE_MAX
 };
 
-enum tcpho_errors {
-	// Use Linux errno for general errors
-	LIBTCPHO_ERRNO_START = 4000,
-	LIBTCPHO_ERRNO_LIBBPF, // libbpf error
-	LIBTCPHO_ERRNO_TCCMD, // tc command error
-};
-
-struct tcpho_l2info {
+struct tcpho_l2redir_rule {
 	uint32_t state;
 	uint8_t to[6];
 };
 
-struct tcpho_l2sw_add_attr {
-	int sock;
-	uint8_t dmac[6];
-};
-
-struct tcpho_l2sw_mod_attr {
-	int sock;
-	uint32_t new_state;
-};
-
-struct tcpho_l2sw_del_attr {
-	int sock;
-};
-
-struct tcpho_l2sw_driver {
-	int (*add)(struct tcpho_l2sw_driver *,
-			struct tcpho_l2sw_add_attr *);
-	int (*mod)(struct tcpho_l2sw_driver *,
-			struct tcpho_l2sw_mod_attr *);
-	int (*del)(struct tcpho_l2sw_driver *,
-			struct tcpho_l2sw_del_attr *);
-};
-
-int tcpho_l2redir_driver_create(struct tcpho_l2sw_driver **, char *);
-int tcpho_l2redir_driver_destroy(struct tcpho_l2sw_driver *);
-int tcpho_l2sw_add_rule(struct tcpho_l2sw_driver *, struct tcpho_l2sw_add_attr *);
-int tcpho_l2sw_modify_rule(struct tcpho_l2sw_driver *, struct tcpho_l2sw_mod_attr *);
-int tcpho_l2sw_delete_rule(struct tcpho_l2sw_driver *, struct tcpho_l2sw_del_attr *);
+int tcpho_l2redir_open(struct tcpho_l2redir_driver **);
+int tcpho_l2redir_add_rule(struct tcpho_l2redir_driver *, int, uint8_t *, enum tcpho_state);
+int tcpho_l2redir_modify_rule(struct tcpho_l2redir_driver *, int, enum tcpho_state);
+void tcpho_l2redir_close(struct tcpho_l2redir_driver *);

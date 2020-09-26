@@ -19,19 +19,29 @@
 	} \
 })
 
-uint8_t mymac[ETH_ALEN] = {0};
-
 struct packet {
 	struct ethhdr *eth;
 	struct bpf_sock_tuple tuple;
 };
 
+struct mac_addr {
+	uint8_t addr[6];
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__type(key, int);
+	__type(value, struct mac_addr);
+	__uint(max_entries, 256);
+} ifindex_to_mac SEC(".maps");
+
 struct {
 	__uint(type, BPF_MAP_TYPE_SK_STORAGE);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 	__type(key, int);
-	__type(value, struct tcpho_l2info);
-} tcp_handoff_map SEC(".maps");
+	__type(value, struct tcpho_l2redir_rule);
+} tcpho_map SEC(".maps");
 
 static __inline int
 parse_tcp_v4(void *data, void *data_end, uint32_t *offset, struct packet *pkt)
@@ -88,10 +98,12 @@ SEC("classifier") int
 l2redir_main(struct __sk_buff *skb)
 {
 	int action;
+	uint8_t *mymac;
 	struct packet pkt;
+  int ingress_ifindex;
 	uint32_t offset = 0;
 	struct bpf_sock *sk;
-	struct tcpho_l2info *ho_info;
+	struct tcpho_l2redir_rule *rule;
 	void *data = (void *)(long)skb->data;
 	void *data_end = (void *)(long)skb->data_end;
 
@@ -108,24 +120,32 @@ l2redir_main(struct __sk_buff *skb)
 		goto end0;
 	}
 
-	ho_info = bpf_sk_storage_get(&tcp_handoff_map, sk, NULL, 0);
-	if (ho_info == NULL) {
+	rule = bpf_sk_storage_get(&tcpho_map, sk, NULL, 0);
+	if (rule == NULL) {
 		// Socket is not under handoff. Pass it.
 		action = TC_ACT_PIPE;
 		goto end1;
 	}
 
-	if (ho_info->state == TCPHO_STATE_BLOCKING) {
+	if (rule->state == TCPHO_STATE_BLOCKING) {
 		// This socket is blocking. Drop it.
 		action = TC_ACT_SHOT;
 		goto end1;
 	}
 
-	if (ho_info->state == TCPHO_STATE_FORWARDING) {
+	if (rule->state == TCPHO_STATE_FORWARDING) {
+    ingress_ifindex = skb->ingress_ifindex;
+		mymac = bpf_map_lookup_elem(&ifindex_to_mac, &ingress_ifindex);
+		if (mymac == NULL) {
+			action = TC_ACT_PIPE;
+			goto end1;
+		}
+
 		// This socket is forwarding. Redirect it.
-		__builtin_memcpy(pkt.eth->h_dest, ho_info->to, ETH_ALEN);
+		__builtin_memcpy(pkt.eth->h_dest, rule->to, ETH_ALEN);
 		__builtin_memcpy(pkt.eth->h_source, mymac, ETH_ALEN);
 		action = bpf_redirect(skb->ingress_ifindex, 0);
+
 		goto end1;
 	}
 
