@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+import sys
+import json
+import fcntl
+import struct
+import ctypes
+import socket
+import logging
+import subprocess
+import argparse
+
+
+# Keep this sync with C sources
+PIN_PATH = "/sys/fs/bpf/tcpho"
+L2REDIR_PIN_PATH = PIN_PATH + "/l2redir"
+
+
+def run(cmd):
+    return subprocess.run(cmd, shell=True, capture_output=True)
+
+
+def get_hw_addr(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack("256s", bytes(ifname, "utf-8")[:15]))
+    return " ".join("%02x" % b for b in info[18:24])
+
+
+def int_to_u32_bytes(n):
+    return " ".join([ "%02x" % b for b in bytes(ctypes.c_uint32(n)) ])
+
+
+def create(args):
+    res = run(f"mkdir -p {L2REDIR_PIN_PATH}")
+    if res.returncode != 0:
+        logging.error(f"Failed to create bpffs directory {PIN_PATH}")
+        logging.error(res.stderr)
+        return
+
+    res = run(f"bpftool prog load {args.prog} {L2REDIR_PIN_PATH}/main pinmaps {L2REDIR_PIN_PATH}")
+    if res.returncode != 0:
+        logging.error(f"Failed to load L2Redir program")
+        logging.error(res.stderr)
+        return
+
+
+def destroy(args):
+    res = run(f"rm -rf {L2REDIR_PIN_PATH}")
+    if res.returncode != 0:
+        logging.error(f"Failed to remove L2Redir program")
+        logging.error(res.stderr)
+        return
+
+
+def attach(args):
+    ifindex = int_to_u32_bytes(socket.if_nametoindex(args.dev))
+    mac = get_hw_addr(args.dev)
+
+    res = run(f"bpftool map update pinned {L2REDIR_PIN_PATH}/ifindex_to_mac key {ifindex} value hex {mac}")
+    if res.returncode != 0:
+        logging.error(f"Failed to update ifindex_to_mac")
+        logging.error(res.stderr)
+        return
+
+    res = run(f"tc qdisc add dev {args.dev} clsact")
+    if res.returncode != 0:
+        logging.error(f"Failed to attach new qdisc to {args.dev}")
+        logging.error(res.stderr)
+        return
+
+    res = run(f"tc filter add dev {args.dev} ingress bpf direct-action pinned {L2REDIR_PIN_PATH}/main")
+    if res.returncode != 0:
+        logging.error(f"Failed to attach filter rule to {args.dev}")
+        logging.error(res.stderr)
+        return
+
+
+def detach(args):
+    res = run(f"tc qdisc del dev {args.dev} clsact")
+    if res.returncode != 0:
+        logging.error(f"Failed to detach filter rule from {args.dev}")
+        logging.error(res.stderr)
+        return
+
+
+root = argparse.ArgumentParser(description="Interact with tcp handoff redirectors")
+
+l2redir = root.add_subparsers()
+
+l2redir_create = l2redir.add_parser("create", help="Create l2redir instance")
+l2redir_create.add_argument("--prog", help="L2Redir BPF object file to attach",
+        default="/var/lib/tcpho/tcpho_l2redir.bpf.o")
+l2redir_create.set_defaults(handler=create)
+
+l2redir_destroy = l2redir.add_parser("destroy", help="Destroy l2redir instance")
+l2redir_destroy.set_defaults(handler=destroy)
+
+l2redir_attach = l2redir.add_parser("attach", help="Attach l2redir to interface")
+l2redir_attach.add_argument("--dev", help="Target device to attach L2Redir program", required=True)
+l2redir_attach.set_defaults(handler=attach)
+
+l2redir_detach = l2redir.add_parser("detach", help="Detach l2redir to interface")
+l2redir_detach.add_argument("--dev", help="Target device to detach L2Redir program", required=True)
+l2redir_detach.set_defaults(handler=detach)
+
+
+if __name__ == "__main__":
+    args = root.parse_args()
+    if hasattr(args, 'handler'):
+        args.handler(args)
+    else:
+        root.print_help()
