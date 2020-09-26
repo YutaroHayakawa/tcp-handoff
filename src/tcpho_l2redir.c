@@ -11,7 +11,6 @@
 #include <bpf/bpf.h>
 
 #include "tcpho.h"
-#include "tcpho_l2redir.skel.h"
 
 #define PIN_PATH "/sys/fs/bpf/tcpho/l2redir"
 #define PINNED_MAP_PATH PIN_PATH "/tcpho_map"
