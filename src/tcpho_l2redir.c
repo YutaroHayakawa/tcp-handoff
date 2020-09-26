@@ -9,8 +9,8 @@
 #include <linux/if_ether.h>
 
 #include <bpf/bpf.h>
-#include <tcpho/tcpho.h>
 
+#include "tcpho.h"
 #include "tcpho_l2redir.skel.h"
 
 #define PIN_PATH "/sys/fs/bpf/tcpho/l2redir"

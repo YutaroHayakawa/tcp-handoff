@@ -9,7 +9,7 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
-#include <tcpho/tcpho.h>
+#include "tcpho.h"
 
 #define __inline __attribute__((always_inline))
 
