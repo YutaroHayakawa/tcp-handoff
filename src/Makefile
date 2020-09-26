@@ -17,20 +17,19 @@ BPF_CFLAGS= \
 
 LDFLAGS= \
 	-lbpf
-	
 
-TARGETS = libtcpho.a tcpho_l2redir.skel.h test
+TARGETS = libtcpho.a
 
 libtcpho.a: tcpho_l2redir.o
 	ar -crs $@ $^
 
-tcpho_l2redir.o: tcpho_l2redir.skel.h
-
-tcpho_l2redir.skel.h: tcpho_l2redir.bpf.o
-	$(BPFTOOL) gen skeleton $^ > tcpho_l2redir.skel.h
-
 tcpho_l2redir.bpf.o: tcpho_l2redir.bpf.c
 	$(CLANG) $(BPF_CFLAGS) -c $^
+
+install: libtcpho.a tcpho_l2redir.bpf.o
+	install -D libtcpho.a /usr/local/lib/libtcpho.a
+	install -D tcpho_l2redir.bpf.o /var/lib/tcpho/tcpho_l2redir.bpf.o
+	install -D tcpho.h /usr/local/include/tcpho/tcpho.h
 
 clean:
 	- rm -rf $(TARGETS) *.o
